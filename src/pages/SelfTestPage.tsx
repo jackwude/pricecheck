@@ -13,6 +13,9 @@ import {
 } from '../services/storage'
 import { PriceRecord } from '../types'
 import { calculateUnitPrice, getTodayDateString } from '../utils/calculator'
+import { decryptJson, encryptJson } from '../sync/crypto'
+import { mergeRecords } from '../sync/merge'
+import { randomId } from '../sync/encoding'
 
 type SelfTestStatus = 'idle' | 'running' | 'pass' | 'fail'
 
@@ -21,7 +24,7 @@ export default function SelfTestPage() {
     const [status, setStatus] = useState<SelfTestStatus>('idle')
     const [message, setMessage] = useState('')
 
-    const runSelfTest = () => {
+    const runSelfTest = async () => {
         const testProductName = 'SelfTest 商品'
         const testBrand = 'SelfTest 品牌'
         const testCategory = 'SelfTest 分类'
@@ -43,6 +46,7 @@ export default function SelfTestPage() {
             unitPrice: calculateUnitPrice(70, 10, 70),
             notes: 'SelfTest A',
             createdAt: new Date(now - 10_000).toISOString(),
+            updatedAt: new Date(now - 10_000).toISOString(),
         }
 
         const recordB: PriceRecord = {
@@ -59,6 +63,7 @@ export default function SelfTestPage() {
             unitPrice: calculateUnitPrice(60, 10, 70),
             notes: 'SelfTest B',
             createdAt: new Date(now).toISOString(),
+            updatedAt: new Date(now).toISOString(),
         }
 
         setStatus('running')
@@ -90,6 +95,7 @@ export default function SelfTestPage() {
                 totalPrice: 100,
                 unitPrice: calculateUnitPrice(100, recordA.quantity, recordA.unitSpec),
                 notes: 'SelfTest A Updated',
+                updatedAt: new Date().toISOString(),
             }
             updateRecord(recordA.id, updatedA)
             const fetchedA = getRecordById(recordA.id)
@@ -108,6 +114,23 @@ export default function SelfTestPage() {
                 throw new Error(`删除失败：期望剩余 1 条记录，实际 ${all2.length} 条`)
             }
 
+            const sid = randomId(24)
+            const blob = await encryptJson(sid, { v: 1, records: [updatedA] })
+            const decoded = await decryptJson<{ v: 1; records: PriceRecord[] }>(sid, blob)
+            if (!decoded.records?.length || decoded.records[0].id !== updatedA.id) {
+                throw new Error('加密自测失败：解密后的数据不一致')
+            }
+
+            const newerRemote: PriceRecord = {
+                ...updatedA,
+                notes: 'SelfTest Remote',
+                updatedAt: new Date(Date.now() + 1000).toISOString(),
+            }
+            const merged = mergeRecords([updatedA], [newerRemote])
+            if (merged.find(r => r.id === updatedA.id)?.notes !== 'SelfTest Remote') {
+                throw new Error('合并自测失败：未选择更新时间更新的一侧')
+            }
+
             setStatus('pass')
             setMessage('自测通过：新增/查询/更新/删除/排序均正常')
             console.warn('SELFTEST:PASS')
@@ -121,7 +144,7 @@ export default function SelfTestPage() {
     }
 
     useEffect(() => {
-        runSelfTest()
+        void runSelfTest()
     }, [])
 
     return (
@@ -149,7 +172,7 @@ export default function SelfTestPage() {
                         <textarea value={message} readOnly rows={4} />
                     </div>
 
-                    <button className="button-primary" type="button" onClick={runSelfTest}>
+                    <button className="button-primary" type="button" onClick={() => void runSelfTest()}>
                         重新运行
                     </button>
                 </div>

@@ -16,6 +16,9 @@ export default function HomePage() {
 
     useEffect(() => {
         loadRecords()
+        const onChanged = () => loadRecords()
+        window.addEventListener('pricecheck:records-changed', onChanged)
+        return () => window.removeEventListener('pricecheck:records-changed', onChanged)
     }, [])
 
     const loadRecords = () => {

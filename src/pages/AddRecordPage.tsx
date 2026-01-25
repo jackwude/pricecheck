@@ -104,6 +104,8 @@ export default function AddRecordPage() {
             return
         }
 
+        const nowIso = new Date().toISOString()
+        const existing = isEditMode && id ? getRecordById(id) : null
         const record: PriceRecord = {
             id: isEditMode && id ? id : generateId(),
             productName: formData.productName,
@@ -117,7 +119,9 @@ export default function AddRecordPage() {
             unitType: formData.unitType,
             unitPrice: unitPrice,
             notes: formData.notes,
-            createdAt: isEditMode && id ? getRecordById(id)?.createdAt || new Date().toISOString() : new Date().toISOString(),
+            createdAt: existing?.createdAt || nowIso,
+            updatedAt: nowIso,
+            deletedAt: existing?.deletedAt,
         }
 
         if (isEditMode && id) {

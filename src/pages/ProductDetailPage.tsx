@@ -31,13 +31,14 @@ export default function ProductDetailPage() {
     })
 
     useEffect(() => {
-        if (productName && brand) {
-            const history = getRecordsByProduct(
-                decodeURIComponent(productName),
-                decodeURIComponent(brand)
-            )
+        const load = () => {
+            if (!productName || !brand) return
+            const history = getRecordsByProduct(decodeURIComponent(productName), decodeURIComponent(brand))
             setRecords(history)
         }
+        load()
+        window.addEventListener('pricecheck:records-changed', load)
+        return () => window.removeEventListener('pricecheck:records-changed', load)
     }, [productName, brand])
 
     useEffect(() => {
@@ -120,6 +121,7 @@ export default function ProductDetailPage() {
             unitPrice: currentTryUnitPrice,
             notes: '价格试算添加',
             createdAt: nowIso,
+            updatedAt: nowIso,
         }
 
         addRecord(record)

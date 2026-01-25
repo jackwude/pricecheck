@@ -13,6 +13,8 @@ export interface PriceRecord {
     unitPrice: number             // 单位价格（自动计算）
     notes?: string                // 备注
     createdAt: string             // 创建时间 (ISO格式)
+    updatedAt: string             // 更新时间 (ISO格式)
+    deletedAt?: string            // 删除时间 (ISO格式)
 }
 
 // 主题类型

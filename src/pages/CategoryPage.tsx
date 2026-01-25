@@ -13,9 +13,17 @@ export default function CategoryPage() {
     const [records, setRecords] = useState<PriceRecord[]>([])
 
     useEffect(() => {
-        const cats = getAllCategories()
-        setCategories(cats)
-    }, [])
+        const load = () => {
+            const cats = getAllCategories()
+            setCategories(cats)
+            if (selectedCategory) {
+                setRecords(getRecordsByCategory(selectedCategory))
+            }
+        }
+        load()
+        window.addEventListener('pricecheck:records-changed', load)
+        return () => window.removeEventListener('pricecheck:records-changed', load)
+    }, [selectedCategory])
 
     const handleCategoryClick = (category: string) => {
         setSelectedCategory(category)
