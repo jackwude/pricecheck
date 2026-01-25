@@ -48,6 +48,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Wait for other deployments
+        run: sleep 90
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
