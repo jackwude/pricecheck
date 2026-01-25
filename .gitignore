@@ -12,6 +12,18 @@ dist
 dist-ssr
 *.local
 
+# Env files (keep examples)
+.env
+.env.*
+!.env.example
+
+# Tooling caches
+coverage
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+.cache
+
 # Editor directories and files
 .trae
 .vercel
