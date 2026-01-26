@@ -1,22 +1,44 @@
 export default {
     async fetch(request, env) {
-        const origin = request.headers.get('Origin') || ''
-        const allowedOrigin = env.ALLOWED_ORIGIN || 'https://jackwude.github.io'
+        const originHeader = request.headers.get('Origin')
+        const allowListRaw =
+            env.ALLOWED_ORIGINS ||
+            env.ALLOWED_ORIGIN ||
+            'https://jackwude.github.io'
+
+        const allowedOrigins = String(allowListRaw)
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean)
+
+        const isBrowserRequest = Boolean(originHeader)
+        const originAllowed = originHeader ? allowedOrigins.includes(originHeader) : false
+
+        const corsOrigin = originHeader ? (originAllowed ? originHeader : '') : '*'
+
         const headers = {
             'content-type': 'application/json; charset=utf-8',
-            'access-control-allow-origin': origin === allowedOrigin ? origin : allowedOrigin,
+            'access-control-allow-origin': corsOrigin,
             'access-control-allow-methods': 'GET,PUT,OPTIONS',
             'access-control-allow-headers': 'content-type',
             'access-control-max-age': '86400',
+            vary: 'Origin',
         }
 
         if (request.method === 'OPTIONS') {
+            if (isBrowserRequest && !originAllowed) {
+                return new Response(null, { status: 403, headers })
+            }
             return new Response(null, { status: 204, headers })
         }
 
         const url = new URL(request.url)
         if (url.pathname !== '/sync') {
             return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers })
+        }
+
+        if (isBrowserRequest && !originAllowed) {
+            return new Response(JSON.stringify({ error: 'Origin not allowed' }), { status: 403, headers })
         }
 
         const sid = url.searchParams.get('sid') || ''

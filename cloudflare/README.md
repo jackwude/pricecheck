@@ -20,3 +20,7 @@
 - 部署后会得到一个 Worker URL（形如 `https://xxx.workers.dev`）
 - 在应用“设置 → 同步”里填入：`https://xxx.workers.dev/sync`
 - 或者把 `#api=...` 放进同步链接中，其他设备打开同一链接即可自动配置
+
+## 本地开发（可选）
+- 如果你需要在本地 `http://localhost:5173` 调试前端同步，请在 Worker 里把 `ALLOWED_ORIGINS` 配置为逗号分隔：
+  - `https://jackwude.github.io,http://localhost:5173`
