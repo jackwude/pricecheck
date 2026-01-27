@@ -28,8 +28,7 @@
 1. 安装并登录
    - `npm i -g wrangler`
    - `wrangler login`
-2. 把你的 D1 database id 填进 [wrangler.toml](file:///Users/fx/Library/Mobile%20Documents/com~apple~CloudDocs/Anti-gravity/pricecheck/wrangler.toml)
-3. 执行迁移
+2. 执行迁移
    - `wrangler d1 migrations apply pricecheck-db --remote`
 
 ## 3. 前端如何填写同步地址
