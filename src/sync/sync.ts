@@ -5,6 +5,7 @@ import { ensureSyncHash } from './hash'
 import { mergeRecords } from './merge'
 import { SyncRemoteClient } from './remote'
 import { setSyncState } from './state'
+import { normalizeSyncApiUrl } from './url'
 
 type SyncPayloadV1 = {
     v: 1
@@ -12,18 +13,31 @@ type SyncPayloadV1 = {
 }
 
 function getApiUrlFromSettingsOrHash(hashApi?: string): string | null {
-    if (hashApi && /^https?:\/\//.test(hashApi)) return hashApi
+    const normalizedHashApi = hashApi ? normalizeSyncApiUrl(hashApi) : ''
+    if (normalizedHashApi) return normalizedHashApi
+
     const settings = getSettings()
-    const url = typeof settings?.syncApiUrl === 'string' ? settings.syncApiUrl.trim() : ''
-    return url && /^https?:\/\//.test(url) ? url : null
+    const normalizedSettingsApi =
+        typeof settings?.syncApiUrl === 'string' ? normalizeSyncApiUrl(settings.syncApiUrl) : ''
+    if (normalizedSettingsApi) return normalizedSettingsApi
+
+    const host = window.location.hostname
+    const port = window.location.port
+    const isGitHubPages = host.endsWith('github.io')
+    const isViteDev = host === 'localhost' && port === '5173'
+    if (isGitHubPages || isViteDev) return null
+
+    return '/api/sync'
 }
 
 function persistApiUrlFromHash(hashApi?: string) {
-    if (!hashApi || !/^https?:\/\//.test(hashApi)) return
+    if (!hashApi) return
+    const normalized = normalizeSyncApiUrl(hashApi)
+    if (!normalized) return
     const settings = getSettings()
     const current = typeof settings?.syncApiUrl === 'string' ? settings.syncApiUrl.trim() : ''
-    if (current === hashApi) return
-    saveSettings({ ...settings, syncApiUrl: hashApi })
+    if (current === normalized) return
+    saveSettings({ ...settings, syncApiUrl: normalized })
 }
 
 function isConflictError(error: unknown): error is { code: number } {

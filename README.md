@@ -14,5 +14,5 @@ npm run dev
 - 开发与回退流程：`DEV.md`
 - 发版与版本管理：`RELEASE.md`
 - 同步服务（Cloudflare Worker）：`cloudflare/README.md`
+- 数据库改造（Cloudflare Pages + Functions + D1）：`cloudflare/pages-d1.md`
 - 提交与分支约定：`CONTRIBUTING.md`
-

@@ -9,6 +9,7 @@ import { Download, Upload, Sun, Moon, Link2, RefreshCcw } from 'lucide-react'
 import { buildSyncLink, ensureSyncHash } from '../sync/hash'
 import { getSyncState, subscribeSyncState } from '../sync/state'
 import { initSync } from '../sync/sync'
+import { normalizeSyncApiUrl } from '../sync/url'
 
 export default function SettingsPage() {
     const navigate = useNavigate()
@@ -21,10 +22,14 @@ export default function SettingsPage() {
     useEffect(() => {
         const settings = getSettings()
         setTheme(settings.theme || 'light')
-        setSyncApiUrl(typeof settings.syncApiUrl === 'string' ? settings.syncApiUrl : '')
+        const normalizedSettingsApi = typeof settings.syncApiUrl === 'string' ? normalizeSyncApiUrl(settings.syncApiUrl) : ''
+        const isGitHubPages = window.location.hostname.endsWith('github.io')
+        const defaultApi = isGitHubPages ? '' : '/api/sync'
+        setSyncApiUrl(normalizedSettingsApi || defaultApi)
 
         const { syncId, api } = ensureSyncHash()
-        setSyncLink(buildSyncLink(syncId, api || (typeof settings.syncApiUrl === 'string' ? settings.syncApiUrl : undefined)))
+        const normalizedApi = normalizeSyncApiUrl(api || '') || normalizedSettingsApi || defaultApi
+        setSyncLink(buildSyncLink(syncId, normalizedApi || undefined))
 
         const unsub = subscribeSyncState(() => setSyncStatus(getSyncState()))
         return () => unsub()
@@ -38,13 +43,17 @@ export default function SettingsPage() {
     }
 
     const handleSaveSyncApiUrl = () => {
-        const trimmed = syncApiUrl.trim()
+        const trimmed = normalizeSyncApiUrl(syncApiUrl)
+        const isGitHubPages = window.location.hostname.endsWith('github.io')
+        const defaultApi = isGitHubPages ? '' : '/api/sync'
+        setSyncApiUrl(trimmed || defaultApi)
         const settings = getSettings()
         saveSettings({ ...settings, syncApiUrl: trimmed })
         const { syncId } = ensureSyncHash()
-        const nextLink = buildSyncLink(syncId, trimmed || undefined)
+        const apiParam = trimmed || defaultApi
+        const nextLink = buildSyncLink(syncId, apiParam || undefined)
         setSyncLink(nextLink)
-        const hash = trimmed ? `#sync=${encodeURIComponent(syncId)}&api=${encodeURIComponent(trimmed)}` : `#sync=${encodeURIComponent(syncId)}`
+        const hash = apiParam ? `#sync=${encodeURIComponent(syncId)}&api=${encodeURIComponent(apiParam)}` : `#sync=${encodeURIComponent(syncId)}`
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`)
         initSync()
         push({ title: '同步配置已保存', description: trimmed ? '已启用跨设备同步。' : '已关闭跨设备同步。', variant: 'success' })
@@ -152,8 +161,11 @@ export default function SettingsPage() {
                                 type="text"
                                 value={syncApiUrl}
                                 onChange={(e) => setSyncApiUrl(e.target.value)}
-                                placeholder="例如：https://xxx.workers.dev/sync"
+                                placeholder="例如：/api/sync 或 https://xxx.workers.dev/sync"
                             />
+                            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75, lineHeight: 1.5 }}>
+                                不要带 <code>?sid=...</code>，应用会自动拼接。推荐同域：<code>/api/sync</code>
+                            </div>
                             <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
                                 <Button size="sm" variant="primary" type="button" onClick={handleSaveSyncApiUrl}>
                                     保存
