@@ -21,6 +21,8 @@
 - Binding name：`DB`
 - Database：选择 `pricecheck-db`
 
+如果你在 Pages 的 Settings 里发现 “Bindings 由 wrangler.toml 管理” 导致无法点击 Add，请确保仓库根目录没有 `wrangler.toml`，然后重新触发一次部署后再添加绑定。
+
 ## 2. 初始化数据库表
 本仓库提供迁移文件：[0001_sync_spaces.sql](file:///Users/fx/Library/Mobile%20Documents/com~apple~CloudDocs/Anti-gravity/pricecheck/migrations/0001_sync_spaces.sql)
 
