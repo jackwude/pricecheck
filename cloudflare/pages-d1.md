@@ -56,6 +56,6 @@
 - `/api/sync` 由 Pages Functions 提供（连 D1）
 
 ## 5. 同步接口说明
-Pages Functions 实现在：[sync.ts](file:///Users/fx/Library/Mobile%20Documents/com~apple~CloudDocs/Anti-gravity/pricecheck/functions/api/sync.ts)
+Pages Functions 实现在：[sync.js](file:///Users/fx/Library/Mobile%20Documents/com~apple~CloudDocs/Anti-gravity/pricecheck/functions/api/sync.js)
 - `GET /api/sync?sid=...` → `{ rev, blob }`
 - `PUT /api/sync?sid=...` → `{ rev }`（rev 冲突返回 409）
