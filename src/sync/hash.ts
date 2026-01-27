@@ -36,11 +36,6 @@ export function ensureSyncHash(): SyncHash {
 
     localStorage.setItem('pricecheck_sync_id', syncId)
 
-    const nextHash = buildHash({ sync: syncId, api })
-    if (window.location.hash !== nextHash) {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`)
-    }
-
     return { syncId, api }
 }
 
