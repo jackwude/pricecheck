@@ -31,14 +31,15 @@ export default function ProductDetailPage() {
     })
 
     useEffect(() => {
-        const load = () => {
+        const load = async () => {
             if (!productName || !brand) return
-            const history = getRecordsByProduct(decodeURIComponent(productName), decodeURIComponent(brand))
+            const history = await getRecordsByProduct(decodeURIComponent(productName), decodeURIComponent(brand))
             setRecords(history)
         }
         load()
-        window.addEventListener('pricecheck:records-changed', load)
-        return () => window.removeEventListener('pricecheck:records-changed', load)
+        const onChanged = () => load()
+        window.addEventListener('pricecheck:records-changed', onChanged)
+        return () => window.removeEventListener('pricecheck:records-changed', onChanged)
     }, [productName, brand])
 
     useEffect(() => {
@@ -86,7 +87,7 @@ export default function ProductDetailPage() {
         setTryFormData(prev => ({ ...prev, [field]: value }))
     }
 
-    const handleAddTryToHistory = () => {
+    const handleAddTryToHistory = async () => {
         const decodedProductName = decodeURIComponent(productName || '')
         const decodedBrand = decodeURIComponent(brand || '')
         const totalPrice = Number(tryFormData.totalPrice)
@@ -124,8 +125,8 @@ export default function ProductDetailPage() {
             updatedAt: nowIso,
         }
 
-        addRecord(record)
-        const history = getRecordsByProduct(decodedProductName, decodedBrand)
+        await addRecord(record)
+        const history = await getRecordsByProduct(decodedProductName, decodedBrand)
         setRecords(history)
         setTryFormData(prev => ({ ...prev, totalPrice: '' }))
         push({ title: '已添加到购买历史', description: '你可以在下方历史列表中继续编辑或删除。', variant: 'success' })
@@ -140,13 +141,12 @@ export default function ProductDetailPage() {
         setShowConfirm(true)
     }
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (recordToDelete) {
-            deleteRecord(recordToDelete.id)
+            await deleteRecord(recordToDelete.id)
             const updatedRecords = records.filter(r => r.id !== recordToDelete.id)
             setRecords(updatedRecords)
 
-            // 如果删除后没有记录了，返回首页
             if (updatedRecords.length === 0) {
                 navigate('/')
             }

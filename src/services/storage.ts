@@ -1,6 +1,6 @@
 import { PriceRecord } from '../types'
+import { supabase } from '../lib/supabase'
 
-const STORAGE_KEY = 'pricecheck_records'
 const SETTINGS_KEY = 'pricecheck_settings'
 
 function notifyRecordsChanged() {
@@ -13,155 +13,189 @@ function notifySettingsChanged() {
     window.dispatchEvent(new Event('pricecheck:settings-changed'))
 }
 
-function normalizeRecord(raw: any): PriceRecord | null {
-    if (!raw || typeof raw !== 'object') return null
-    if (typeof raw.id !== 'string' || !raw.id) return null
-    if (typeof raw.productName !== 'string') return null
-    if (typeof raw.brand !== 'string') return null
-    if (typeof raw.category !== 'string') return null
-    if (typeof raw.purchaseDate !== 'string') return null
-    if (typeof raw.channel !== 'string') return null
-    if (typeof raw.totalPrice !== 'number') return null
-    if (typeof raw.quantity !== 'number') return null
-    if (typeof raw.unitSpec !== 'number') return null
-    if (typeof raw.unitType !== 'string') return null
-    if (typeof raw.unitPrice !== 'number') return null
-    if (typeof raw.createdAt !== 'string') return null
-
-    const createdAt = raw.createdAt
-    const updatedAt = typeof raw.updatedAt === 'string' && raw.updatedAt ? raw.updatedAt : createdAt
-    const deletedAt = typeof raw.deletedAt === 'string' && raw.deletedAt ? raw.deletedAt : undefined
-
+function dbRecordToPriceRecord(dbRecord: any): PriceRecord {
     return {
-        id: raw.id,
-        productName: raw.productName,
-        brand: raw.brand,
-        category: raw.category,
-        purchaseDate: raw.purchaseDate,
-        channel: raw.channel,
-        totalPrice: raw.totalPrice,
-        quantity: raw.quantity,
-        unitSpec: raw.unitSpec,
-        unitType: raw.unitType,
-        unitPrice: raw.unitPrice,
-        notes: typeof raw.notes === 'string' ? raw.notes : undefined,
-        createdAt,
-        updatedAt,
-        deletedAt,
+        id: dbRecord.id,
+        productName: dbRecord.product_name,
+        brand: dbRecord.brand,
+        category: dbRecord.category,
+        purchaseDate: dbRecord.purchase_date,
+        channel: dbRecord.channel,
+        totalPrice: Number(dbRecord.total_price),
+        quantity: dbRecord.quantity,
+        unitSpec: Number(dbRecord.unit_spec),
+        unitType: dbRecord.unit_type,
+        unitPrice: Number(dbRecord.unit_price),
+        notes: dbRecord.notes || undefined,
+        createdAt: dbRecord.created_at,
+        updatedAt: dbRecord.updated_at,
+        deletedAt: dbRecord.deleted_at || undefined,
     }
 }
 
-function loadStoredRecords(): PriceRecord[] {
-    try {
-        const data = localStorage.getItem(STORAGE_KEY)
-        const parsed = data ? JSON.parse(data) : []
-        if (!Array.isArray(parsed)) return []
-        return parsed.map(normalizeRecord).filter((r): r is PriceRecord => Boolean(r))
-    } catch (error) {
+function priceRecordToDbRecord(record: PriceRecord): any {
+    return {
+        id: record.id,
+        product_name: record.productName,
+        brand: record.brand,
+        category: record.category,
+        purchase_date: record.purchaseDate,
+        channel: record.channel,
+        total_price: record.totalPrice,
+        quantity: record.quantity,
+        unit_spec: record.unitSpec,
+        unit_type: record.unitType,
+        unit_price: record.unitPrice,
+        notes: record.notes || null,
+        created_at: record.createdAt,
+        updated_at: record.updatedAt,
+        deleted_at: record.deletedAt || null,
+    }
+}
+
+export async function getAllRecordsForSync(): Promise<PriceRecord[]> {
+    const { data, error } = await supabase
+        .from('price_records')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+    if (error) {
         console.error('读取记录失败:', error)
         return []
     }
+
+    return data.map(dbRecordToPriceRecord)
 }
 
-function saveStoredRecords(records: PriceRecord[]): void {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+export async function replaceAllRecordsForSync(records: PriceRecord[]): Promise<void> {
+    const { error: deleteError } = await supabase
+        .from('price_records')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000')
+
+    if (deleteError) {
+        console.error('清空记录失败:', deleteError)
+        throw deleteError
+    }
+
+    if (records.length === 0) {
         notifyRecordsChanged()
-    } catch (error) {
+        return
+    }
+
+    const dbRecords = records.map(priceRecordToDbRecord)
+    const { error: insertError } = await supabase
+        .from('price_records')
+        .insert(dbRecords)
+
+    if (insertError) {
+        console.error('插入记录失败:', insertError)
+        throw insertError
+    }
+
+    notifyRecordsChanged()
+}
+
+export async function getAllRecords(): Promise<PriceRecord[]> {
+    const records = await getAllRecordsForSync()
+    return records.filter(r => !r.deletedAt)
+}
+
+export async function getRecordById(id: string): Promise<PriceRecord | null> {
+    const { data, error } = await supabase
+        .from('price_records')
+        .select('*')
+        .eq('id', id)
+        .is('deleted_at', null)
+        .single()
+
+    if (error) {
+        if (error.code === 'PGRST116') return null
+        console.error('获取记录失败:', error)
+        return null
+    }
+
+    return data ? dbRecordToPriceRecord(data) : null
+}
+
+export async function addRecord(record: PriceRecord): Promise<void> {
+    const nowIso = new Date().toISOString()
+    const newRecord: PriceRecord = {
+        ...record,
+        createdAt: record.createdAt || nowIso,
+        updatedAt: record.updatedAt || nowIso,
+        deletedAt: undefined,
+    }
+
+    const { error } = await supabase
+        .from('price_records')
+        .insert(priceRecordToDbRecord(newRecord))
+
+    if (error) {
         console.error('保存记录失败:', error)
         throw error
     }
+
+    notifyRecordsChanged()
 }
 
-export function getAllRecordsForSync(): PriceRecord[] {
-    return loadStoredRecords()
-}
-
-export function replaceAllRecordsForSync(records: PriceRecord[]): void {
-    saveStoredRecords(records)
-}
-
-// 获取所有记录（不包含已删除）
-export function getAllRecords(): PriceRecord[] {
-    return loadStoredRecords().filter(r => !r.deletedAt)
-}
-
-// 获取单条记录
-export function getRecordById(id: string): PriceRecord | null {
-    const records = getAllRecords()
-    return records.find(record => record.id === id) || null
-}
-
-// 新增记录
-export function addRecord(record: PriceRecord): void {
-    try {
-        const nowIso = new Date().toISOString()
-        const nextRecord: PriceRecord = {
-            ...record,
-            createdAt: record.createdAt || nowIso,
-            updatedAt: record.updatedAt || nowIso,
-            deletedAt: undefined,
-        }
-
-        const records = loadStoredRecords()
-        records.unshift(nextRecord)
-        saveStoredRecords(records)
-    } catch (error) {
-        console.error('保存记录失败:', error)
-        throw error
+export async function updateRecord(id: string, updatedRecord: PriceRecord): Promise<void> {
+    const nowIso = new Date().toISOString()
+    const recordToUpdate = {
+        ...priceRecordToDbRecord(updatedRecord),
+        updated_at: updatedRecord.updatedAt || nowIso,
     }
-}
 
-// 更新记录
-export function updateRecord(id: string, updatedRecord: PriceRecord): void {
-    try {
-        const nowIso = new Date().toISOString()
-        const records = loadStoredRecords()
-        const index = records.findIndex(record => record.id === id)
-        if (index !== -1) {
-            records[index] = {
-                ...updatedRecord,
-                updatedAt: updatedRecord.updatedAt || nowIso,
-            }
-            saveStoredRecords(records)
-        }
-    } catch (error) {
+    const { error } = await supabase
+        .from('price_records')
+        .update(recordToUpdate)
+        .eq('id', id)
+
+    if (error) {
         console.error('更新记录失败:', error)
         throw error
     }
+
+    notifyRecordsChanged()
 }
 
-// 删除记录
-export function deleteRecord(id: string): void {
-    try {
-        const records = loadStoredRecords()
-        const index = records.findIndex(r => r.id === id)
-        if (index === -1) return
-        const nowIso = new Date().toISOString()
-        records[index] = {
-            ...records[index],
-            deletedAt: nowIso,
-            updatedAt: nowIso,
-        }
-        saveStoredRecords(records)
-    } catch (error) {
+export async function deleteRecord(id: string): Promise<void> {
+    const nowIso = new Date().toISOString()
+
+    const { error } = await supabase
+        .from('price_records')
+        .update({
+            deleted_at: nowIso,
+            updated_at: nowIso,
+        })
+        .eq('id', id)
+
+    if (error) {
         console.error('删除记录失败:', error)
         throw error
     }
+
+    notifyRecordsChanged()
 }
 
-// 获取同商品的历史记录
-export function getRecordsByProduct(productName: string, brand: string): PriceRecord[] {
-    const records = getAllRecords()
-    const filtered = records.filter(
-        record =>
-            record.productName.toLowerCase() === productName.toLowerCase() &&
-            record.brand.toLowerCase() === brand.toLowerCase()
-    )
+export async function getRecordsByProduct(productName: string, brand: string): Promise<PriceRecord[]> {
+    const { data, error } = await supabase
+        .from('price_records')
+        .select('*')
+        .ilike('product_name', productName)
+        .ilike('brand', brand)
+        .is('deleted_at', null)
 
-    if (filtered.length === 0) return []
+    if (error) {
+        console.error('查询记录失败:', error)
+        return []
+    }
 
-    const lowestPrice = Math.min(...filtered.map(r => r.unitPrice))
+    const records = data.map(dbRecordToPriceRecord)
+
+    if (records.length === 0) return []
+
+    const lowestPrice = Math.min(...records.map(r => r.unitPrice))
     const getSortTime = (record: PriceRecord) => {
         const createdAtTime = new Date(record.createdAt).getTime()
         if (!Number.isNaN(createdAtTime)) return createdAtTime
@@ -169,7 +203,7 @@ export function getRecordsByProduct(productName: string, brand: string): PriceRe
         return Number.isNaN(purchaseAtTime) ? 0 : purchaseAtTime
     }
 
-    return filtered.sort((a, b) => {
+    return records.sort((a, b) => {
         const aIsLowest = a.unitPrice === lowestPrice
         const bIsLowest = b.unitPrice === lowestPrice
 
@@ -180,60 +214,106 @@ export function getRecordsByProduct(productName: string, brand: string): PriceRe
     })
 }
 
-// 按分类获取记录
-export function getRecordsByCategory(category: string): PriceRecord[] {
-    const records = getAllRecords()
-    return records.filter(
-        record => record.category.toLowerCase() === category.toLowerCase()
-    )
+export async function getRecordsByCategory(category: string): Promise<PriceRecord[]> {
+    const { data, error } = await supabase
+        .from('price_records')
+        .select('*')
+        .ilike('category', category)
+        .is('deleted_at', null)
+
+    if (error) {
+        console.error('查询记录失败:', error)
+        return []
+    }
+
+    return data.map(dbRecordToPriceRecord)
 }
 
-// 获取所有分类
-export function getAllCategories(): string[] {
-    const records = getAllRecords()
-    const categories = new Set(records.map(record => record.category))
+export async function getAllCategories(): Promise<string[]> {
+    const { data, error } = await supabase
+        .from('price_records')
+        .select('category')
+        .is('deleted_at', null)
+
+    if (error) {
+        console.error('获取分类失败:', error)
+        return []
+    }
+
+    const categories = new Set(data.map(r => r.category))
     return Array.from(categories).sort()
 }
 
-// 搜索记录
-export function searchRecords(keyword: string): PriceRecord[] {
-    const records = getAllRecords()
-    const lowerKeyword = keyword.toLowerCase()
-    return records.filter(record =>
-        record.productName.toLowerCase().includes(lowerKeyword) ||
-        record.brand.toLowerCase().includes(lowerKeyword) ||
-        record.category.toLowerCase().includes(lowerKeyword) ||
-        record.channel.toLowerCase().includes(lowerKeyword)
-    )
+export async function searchRecords(keyword: string): Promise<PriceRecord[]> {
+    const { data, error } = await supabase
+        .from('price_records')
+        .select('*')
+        .is('deleted_at', null)
+        .or(`product_name.ilike.%${keyword}%,brand.ilike.%${keyword}%,category.ilike.%${keyword}%,channel.ilike.%${keyword}%`)
+
+    if (error) {
+        console.error('搜索记录失败:', error)
+        return []
+    }
+
+    return data.map(dbRecordToPriceRecord)
 }
 
-// 导出数据
-export function exportData(): string {
-    const records = getAllRecords()
+export async function exportData(): Promise<string> {
+    const records = await getAllRecords()
     return JSON.stringify(records, null, 2)
 }
 
-// 导入数据
-export function importData(jsonData: string): void {
+export async function importData(jsonData: string): Promise<void> {
     try {
-        const records = JSON.parse(jsonData) as any
-        // 验证数据格式
+        const records = JSON.parse(jsonData) as any[]
+
         if (!Array.isArray(records)) {
             throw new Error('数据格式错误')
         }
 
-        const normalized = records
-            .map(normalizeRecord)
-            .filter((r): r is PriceRecord => Boolean(r))
+        const validRecords: PriceRecord[] = []
+        for (const raw of records) {
+            if (!raw || typeof raw !== 'object') continue
+            if (typeof raw.id !== 'string' || !raw.id) continue
+            if (typeof raw.productName !== 'string') continue
+            if (typeof raw.brand !== 'string') continue
+            if (typeof raw.category !== 'string') continue
+            if (typeof raw.purchaseDate !== 'string') continue
+            if (typeof raw.channel !== 'string') continue
+            if (typeof raw.totalPrice !== 'number') continue
+            if (typeof raw.quantity !== 'number') continue
+            if (typeof raw.unitSpec !== 'number') continue
+            if (typeof raw.unitType !== 'string') continue
+            if (typeof raw.unitPrice !== 'number') continue
+            if (typeof raw.createdAt !== 'string') continue
 
-        saveStoredRecords(normalized)
+            validRecords.push({
+                id: raw.id,
+                productName: raw.productName,
+                brand: raw.brand,
+                category: raw.category,
+                purchaseDate: raw.purchaseDate,
+                channel: raw.channel,
+                totalPrice: raw.totalPrice,
+                quantity: raw.quantity,
+                unitSpec: raw.unitSpec,
+                unitType: raw.unitType,
+                unitPrice: raw.unitPrice,
+                notes: typeof raw.notes === 'string' ? raw.notes : undefined,
+                createdAt: raw.createdAt,
+                updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : raw.createdAt,
+                deletedAt: typeof raw.deletedAt === 'string' ? raw.deletedAt : undefined,
+            })
+        }
+
+        await replaceAllRecordsForSync(validRecords)
     } catch (error) {
         console.error('导入数据失败:', error)
         throw error
     }
 }
 
-// 获取设置
 export function getSettings() {
     try {
         const data = localStorage.getItem(SETTINGS_KEY)
@@ -244,7 +324,6 @@ export function getSettings() {
     }
 }
 
-// 保存设置
 export function saveSettings(settings: any): void {
     try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))

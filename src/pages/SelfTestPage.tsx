@@ -12,10 +12,7 @@ import {
     updateRecord,
 } from '../services/storage'
 import { PriceRecord } from '../types'
-import { calculateUnitPrice, getTodayDateString } from '../utils/calculator'
-import { decryptJson, encryptJson } from '../sync/crypto'
-import { mergeRecords } from '../sync/merge'
-import { randomId } from '../sync/encoding'
+import { calculateUnitPrice, getTodayDateString, generateId } from '../utils/calculator'
 
 type SelfTestStatus = 'idle' | 'running' | 'pass' | 'fail'
 
@@ -33,7 +30,7 @@ export default function SelfTestPage() {
 
         const now = Date.now()
         const recordA: PriceRecord = {
-            id: 'selftest_a',
+            id: generateId(),
             productName: testProductName,
             brand: testBrand,
             category: testCategory,
@@ -50,7 +47,7 @@ export default function SelfTestPage() {
         }
 
         const recordB: PriceRecord = {
-            id: 'selftest_b',
+            id: generateId(),
             productName: testProductName,
             brand: testBrand,
             category: testCategory,
@@ -69,25 +66,25 @@ export default function SelfTestPage() {
         setStatus('running')
         setMessage('运行中…')
 
-        const backup = exportData()
+        const backup = await exportData()
 
         try {
-            importData('[]')
+            await importData('[]')
 
-            addRecord(recordA)
-            addRecord(recordB)
+            await addRecord(recordA)
+            await addRecord(recordB)
 
-            const all1 = getAllRecords()
+            const all1 = await getAllRecords()
             if (all1.length !== 2) {
                 throw new Error(`新增失败：期望 2 条记录，实际 ${all1.length} 条`)
             }
 
-            const productHistory = getRecordsByProduct(testProductName, testBrand)
+            const productHistory = await getRecordsByProduct(testProductName, testBrand)
             if (productHistory.length !== 2) {
                 throw new Error(`查询失败：期望 2 条记录，实际 ${productHistory.length} 条`)
             }
-            if (productHistory[0].id !== 'selftest_b') {
-                throw new Error(`排序失败：期望最低价记录置顶（selftest_b），实际为 ${productHistory[0].id}`)
+            if (productHistory[0].id !== recordB.id) {
+                throw new Error(`排序失败：期望最低价记录置顶（${recordB.id}），实际为 ${productHistory[0].id}`)
             }
 
             const updatedA: PriceRecord = {
@@ -97,38 +94,21 @@ export default function SelfTestPage() {
                 notes: 'SelfTest A Updated',
                 updatedAt: new Date().toISOString(),
             }
-            updateRecord(recordA.id, updatedA)
-            const fetchedA = getRecordById(recordA.id)
+            await updateRecord(recordA.id, updatedA)
+            const fetchedA = await getRecordById(recordA.id)
             if (!fetchedA || fetchedA.totalPrice !== 100) {
                 throw new Error('更新失败：未能读取到更新后的记录')
             }
 
-            const searchResult = searchRecords('SelfTest')
+            const searchResult = await searchRecords('SelfTest')
             if (searchResult.length < 2) {
                 throw new Error(`搜索失败：期望至少 2 条结果，实际 ${searchResult.length} 条`)
             }
 
-            deleteRecord(recordB.id)
-            const all2 = getAllRecords()
+            await deleteRecord(recordB.id)
+            const all2 = await getAllRecords()
             if (all2.length !== 1) {
                 throw new Error(`删除失败：期望剩余 1 条记录，实际 ${all2.length} 条`)
-            }
-
-            const sid = randomId(24)
-            const blob = await encryptJson(sid, { v: 1, records: [updatedA] })
-            const decoded = await decryptJson<{ v: 1; records: PriceRecord[] }>(sid, blob)
-            if (!decoded.records?.length || decoded.records[0].id !== updatedA.id) {
-                throw new Error('加密自测失败：解密后的数据不一致')
-            }
-
-            const newerRemote: PriceRecord = {
-                ...updatedA,
-                notes: 'SelfTest Remote',
-                updatedAt: new Date(Date.now() + 1000).toISOString(),
-            }
-            const merged = mergeRecords([updatedA], [newerRemote])
-            if (merged.find(r => r.id === updatedA.id)?.notes !== 'SelfTest Remote') {
-                throw new Error('合并自测失败：未选择更新时间更新的一侧')
             }
 
             setStatus('pass')
@@ -139,7 +119,7 @@ export default function SelfTestPage() {
             setMessage(error instanceof Error ? error.message : '自测失败')
             console.error('SELFTEST:FAIL', error)
         } finally {
-            importData(backup)
+            await importData(backup)
         }
     }
 
@@ -159,7 +139,7 @@ export default function SelfTestPage() {
             <div className="calculator-container">
                 <div className="calculator-form">
                     <div className="calculator-description">
-                        <p>用于快速验证本地存储的增删改查与排序规则，不会保留测试数据。</p>
+                        <p>用于快速验证 Supabase 数据库的增删改查与排序规则，不会保留测试数据。</p>
                     </div>
 
                     <div className="form-field">

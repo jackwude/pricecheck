@@ -34,24 +34,26 @@ export default function AddRecordPage() {
     const [unitPrice, setUnitPrice] = useState(0)
     const [showComparison, setShowComparison] = useState(false)
     const [errors, setErrors] = useState<Record<string, string>>({})
+    const [comparison, setComparison] = useState<ReturnType<typeof compareWithHistory> | null>(null)
 
     useEffect(() => {
         if (isEditMode && id) {
-            const record = getRecordById(id)
-            if (record) {
-                setFormData({
-                    productName: record.productName,
-                    brand: record.brand,
-                    category: record.category,
-                    purchaseDate: record.purchaseDate,
-                    channel: record.channel,
-                    totalPrice: String(record.totalPrice),
-                    quantity: String(record.quantity),
-                    unitSpec: String(record.unitSpec),
-                    unitType: record.unitType,
-                    notes: record.notes || '',
-                })
-            }
+            getRecordById(id).then(record => {
+                if (record) {
+                    setFormData({
+                        productName: record.productName,
+                        brand: record.brand,
+                        category: record.category,
+                        purchaseDate: record.purchaseDate,
+                        channel: record.channel,
+                        totalPrice: String(record.totalPrice),
+                        quantity: String(record.quantity),
+                        unitSpec: String(record.unitSpec),
+                        unitType: record.unitType,
+                        notes: record.notes || '',
+                    })
+                }
+            })
         }
     }, [id, isEditMode])
 
@@ -63,13 +65,17 @@ export default function AddRecordPage() {
         )
         setUnitPrice(price)
 
-        // 当有商品名和品牌时，显示价格对比
         if (formData.productName && formData.brand && price > 0) {
             setShowComparison(true)
+            getRecordsByProduct(formData.productName, formData.brand).then(history => {
+                const filteredHistory = isEditMode && id ? history.filter(r => r.id !== id) : history
+                setComparison(compareWithHistory(price, filteredHistory))
+            })
         } else {
             setShowComparison(false)
+            setComparison(null)
         }
-    }, [formData.totalPrice, formData.quantity, formData.unitSpec, formData.productName, formData.brand])
+    }, [formData.totalPrice, formData.quantity, formData.unitSpec, formData.productName, formData.brand, id, isEditMode])
 
     const handleChange = (field: string, value: string) => {
         setErrors((prev) => {
@@ -81,7 +87,7 @@ export default function AddRecordPage() {
         setFormData(prev => ({ ...prev, [field]: value }))
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
         const nextErrors: Record<string, string> = {}
@@ -105,7 +111,7 @@ export default function AddRecordPage() {
         }
 
         const nowIso = new Date().toISOString()
-        const existing = isEditMode && id ? getRecordById(id) : null
+        const existing = isEditMode && id ? await getRecordById(id) : null
         const record: PriceRecord = {
             id: isEditMode && id ? id : generateId(),
             productName: formData.productName,
@@ -125,31 +131,13 @@ export default function AddRecordPage() {
         }
 
         if (isEditMode && id) {
-            updateRecord(id, record)
+            await updateRecord(id, record)
         } else {
-            addRecord(record)
+            await addRecord(record)
         }
 
         navigate('/')
     }
-
-    // 获取价格对比数据
-    const getPriceComparison = () => {
-        if (!formData.productName || !formData.brand) {
-            return null
-        }
-
-        let history = getRecordsByProduct(formData.productName, formData.brand)
-
-        // 编辑模式下，排除当前记录
-        if (isEditMode && id) {
-            history = history.filter(r => r.id !== id)
-        }
-
-        return compareWithHistory(unitPrice, history)
-    }
-
-    const comparison = getPriceComparison()
 
     return (
         <div className="page">

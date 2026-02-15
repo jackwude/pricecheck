@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAllRecords, getRecordsByProduct } from '../services/storage'
+import { getAllRecords } from '../services/storage'
 import { PriceRecord } from '../types'
 import RecordCard from '../components/RecordCard'
 import { IconButton } from '../components/ui/IconButton'
@@ -12,6 +12,7 @@ import { Calculator, Folder, Settings, Plus, PackageSearch, X } from 'lucide-rea
 export default function HomePage() {
     const [records, setRecords] = useState<PriceRecord[]>([])
     const [searchQuery, setSearchQuery] = useState('')
+    const [lowestPriceMap, setLowestPriceMap] = useState<Map<string, number>>(new Map())
     const navigate = useNavigate()
 
     useEffect(() => {
@@ -21,9 +22,19 @@ export default function HomePage() {
         return () => window.removeEventListener('pricecheck:records-changed', onChanged)
     }, [])
 
-    const loadRecords = () => {
-        const allRecords = getAllRecords()
+    const loadRecords = async () => {
+        const allRecords = await getAllRecords()
         setRecords(allRecords)
+        
+        const priceMap = new Map<string, number>()
+        for (const record of allRecords) {
+            const key = `${record.productName}|${record.brand}`
+            const current = priceMap.get(key)
+            if (current === undefined || record.unitPrice < current) {
+                priceMap.set(key, record.unitPrice)
+            }
+        }
+        setLowestPriceMap(priceMap)
     }
 
     const filteredRecords = records.filter(record =>
@@ -32,12 +43,10 @@ export default function HomePage() {
         record.category.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
-    // 判断是否为最低价
     const isLowestPrice = (record: PriceRecord): boolean => {
-        const history = getRecordsByProduct(record.productName, record.brand)
-        if (history.length === 0) return false
-        const lowestPrice = Math.min(...history.map(r => r.unitPrice))
-        return record.unitPrice === lowestPrice
+        const key = `${record.productName}|${record.brand}`
+        const lowest = lowestPriceMap.get(key)
+        return lowest !== undefined && record.unitPrice === lowest
     }
 
     const handleRecordClick = (record: PriceRecord) => {

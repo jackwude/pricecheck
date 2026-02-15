@@ -11,23 +11,33 @@ export default function CategoryPage() {
     const [categories, setCategories] = useState<string[]>([])
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
     const [records, setRecords] = useState<PriceRecord[]>([])
+    const [categoryCounts, setCategoryCounts] = useState<Map<string, number>>(new Map())
 
     useEffect(() => {
-        const load = () => {
-            const cats = getAllCategories()
+        const load = async () => {
+            const cats = await getAllCategories()
             setCategories(cats)
+            
+            const counts = new Map<string, number>()
+            for (const cat of cats) {
+                const catRecords = await getRecordsByCategory(cat)
+                counts.set(cat, catRecords.length)
+            }
+            setCategoryCounts(counts)
+            
             if (selectedCategory) {
-                setRecords(getRecordsByCategory(selectedCategory))
+                const categoryRecords = await getRecordsByCategory(selectedCategory)
+                setRecords(categoryRecords)
             }
         }
         load()
-        window.addEventListener('pricecheck:records-changed', load)
-        return () => window.removeEventListener('pricecheck:records-changed', load)
+        window.addEventListener('pricecheck:records-changed', () => load())
+        return () => window.removeEventListener('pricecheck:records-changed', () => load())
     }, [selectedCategory])
 
-    const handleCategoryClick = (category: string) => {
+    const handleCategoryClick = async (category: string) => {
         setSelectedCategory(category)
-        const categoryRecords = getRecordsByCategory(category)
+        const categoryRecords = await getRecordsByCategory(category)
         setRecords(categoryRecords)
     }
 
@@ -59,7 +69,7 @@ export default function CategoryPage() {
                             />
                     ) : (
                         categories.map(category => {
-                            const count = getRecordsByCategory(category).length
+                            const count = categoryCounts.get(category) || 0
                             return (
                                 <div
                                     key={category}

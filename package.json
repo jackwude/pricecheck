@@ -1,6 +1,6 @@
 {
     "name": "pricecheck",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "description": "价格追踪应用 - 记录和对比商品历史最低价",
     "type": "module",
     "scripts": {
@@ -9,6 +9,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
+        "@supabase/supabase-js": "^2.95.3",
         "lucide-react": "^0.469.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",

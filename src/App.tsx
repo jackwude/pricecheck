@@ -8,15 +8,12 @@ import CategoryPage from './pages/CategoryPage'
 import CalculatorPage from './pages/CalculatorPage'
 import SettingsPage from './pages/SettingsPage'
 import SelfTestPage from './pages/SelfTestPage'
-import { initSync } from './sync/sync'
 import './App.css'
 
 function App() {
     useEffect(() => {
-        // 初始化主题
         const settings = getSettings()
         document.documentElement.setAttribute('data-theme', settings.theme || 'light')
-        initSync()
     }, [])
 
     return (
