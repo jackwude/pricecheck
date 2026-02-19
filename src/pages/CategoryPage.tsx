@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAllCategories, getRecordsByCategory } from '../services/storage'
+import { getAllUniqueNames, getRecordsByUniqueName } from '../services/storage'
 import { PriceRecord } from '../types'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
@@ -8,41 +8,41 @@ import { FolderOpen } from 'lucide-react'
 
 export default function CategoryPage() {
     const navigate = useNavigate()
-    const [categories, setCategories] = useState<string[]>([])
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+    const [uniqueNames, setUniqueNames] = useState<string[]>([])
+    const [selectedUniqueName, setSelectedUniqueName] = useState<string | null>(null)
     const [records, setRecords] = useState<PriceRecord[]>([])
-    const [categoryCounts, setCategoryCounts] = useState<Map<string, number>>(new Map())
+    const [uniqueNameCounts, setUniqueNameCounts] = useState<Map<string, number>>(new Map())
 
     useEffect(() => {
         const load = async () => {
-            const cats = await getAllCategories()
-            setCategories(cats)
+            const names = await getAllUniqueNames()
+            setUniqueNames(names)
             
             const counts = new Map<string, number>()
-            for (const cat of cats) {
-                const catRecords = await getRecordsByCategory(cat)
-                counts.set(cat, catRecords.length)
+            for (const name of names) {
+                const nameRecords = await getRecordsByUniqueName(name)
+                counts.set(name, nameRecords.length)
             }
-            setCategoryCounts(counts)
+            setUniqueNameCounts(counts)
             
-            if (selectedCategory) {
-                const categoryRecords = await getRecordsByCategory(selectedCategory)
-                setRecords(categoryRecords)
+            if (selectedUniqueName) {
+                const nameRecords = await getRecordsByUniqueName(selectedUniqueName)
+                setRecords(nameRecords)
             }
         }
         load()
         window.addEventListener('pricecheck:records-changed', () => load())
         return () => window.removeEventListener('pricecheck:records-changed', () => load())
-    }, [selectedCategory])
+    }, [selectedUniqueName])
 
-    const handleCategoryClick = async (category: string) => {
-        setSelectedCategory(category)
-        const categoryRecords = await getRecordsByCategory(category)
-        setRecords(categoryRecords)
+    const handleUniqueNameClick = async (uniqueName: string) => {
+        setSelectedUniqueName(uniqueName)
+        const nameRecords = await getRecordsByUniqueName(uniqueName)
+        setRecords(nameRecords)
     }
 
-    const handleProductClick = (record: PriceRecord) => {
-        navigate(`/product/${encodeURIComponent(record.productName)}/${encodeURIComponent(record.brand)}`)
+    const handleRecordClick = (record: PriceRecord) => {
+        navigate(`/product/${encodeURIComponent(record.uniqueName)}`)
     }
 
     return (
@@ -54,13 +54,13 @@ export default function CategoryPage() {
                 <h1>分类浏览</h1>
             </header>
 
-            {!selectedCategory ? (
+            {!selectedUniqueName ? (
                 <div className="categories-grid">
-                    {categories.length === 0 ? (
+                    {uniqueNames.length === 0 ? (
                             <EmptyState
                                 icon={<FolderOpen size={44} />}
-                                title="还没有分类"
-                                description="添加记录后，这里会按分类聚合展示。"
+                                title="还没有商品分类"
+                                description="添加记录后，这里会按商品唯一名称聚合展示。"
                                 action={
                                     <Button variant="secondary" size="sm" onClick={() => navigate('/add')}>
                                         新增记录
@@ -68,23 +68,23 @@ export default function CategoryPage() {
                                 }
                             />
                     ) : (
-                        categories.map(category => {
-                            const count = categoryCounts.get(category) || 0
+                        uniqueNames.map(uniqueName => {
+                            const count = uniqueNameCounts.get(uniqueName) || 0
                             return (
                                 <div
-                                    key={category}
+                                    key={uniqueName}
                                     className="category-card"
-                                    onClick={() => handleCategoryClick(category)}
+                                    onClick={() => handleUniqueNameClick(uniqueName)}
                                         role="button"
                                         tabIndex={0}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' || e.key === ' ') {
                                                 e.preventDefault()
-                                                handleCategoryClick(category)
+                                                handleUniqueNameClick(uniqueName)
                                             }
                                         }}
                                 >
-                                    <div className="category-name">{category}</div>
+                                    <div className="category-name">{uniqueName}</div>
                                     <div className="category-count">{count} 条记录</div>
                                 </div>
                             )
@@ -94,10 +94,10 @@ export default function CategoryPage() {
             ) : (
                 <div>
                     <div className="category-header">
-                            <Button variant="secondary" size="sm" onClick={() => setSelectedCategory(null)}>
+                            <Button variant="secondary" size="sm" onClick={() => setSelectedUniqueName(null)}>
                                 ← 返回分类列表
                             </Button>
-                        <h2>{selectedCategory}</h2>
+                        <h2>{selectedUniqueName}</h2>
                         <p className="category-subtitle">{records.length} 条记录</p>
                     </div>
 
@@ -106,11 +106,12 @@ export default function CategoryPage() {
                             <div
                                 key={record.id}
                                 className="product-item"
-                                onClick={() => handleProductClick(record)}
+                                onClick={() => handleRecordClick(record)}
                             >
                                 <div className="product-info">
                                     <h3>{record.productName}</h3>
                                     <p className="product-brand">{record.brand}</p>
+                                    {record.category && <p className="product-category">{record.category}</p>}
                                 </div>
                                 <div className="product-price">
                                     ¥{record.unitPrice.toFixed(2)}/{record.unitType}

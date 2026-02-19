@@ -16,6 +16,7 @@ function notifySettingsChanged() {
 function dbRecordToPriceRecord(dbRecord: any): PriceRecord {
     return {
         id: dbRecord.id,
+        uniqueName: dbRecord.unique_name || '',
         productName: dbRecord.product_name,
         brand: dbRecord.brand,
         category: dbRecord.category,
@@ -36,6 +37,7 @@ function dbRecordToPriceRecord(dbRecord: any): PriceRecord {
 function priceRecordToDbRecord(record: PriceRecord): any {
     return {
         id: record.id,
+        unique_name: record.uniqueName,
         product_name: record.productName,
         brand: record.brand,
         category: record.category,
@@ -178,6 +180,56 @@ export async function deleteRecord(id: string): Promise<void> {
     notifyRecordsChanged()
 }
 
+export async function getRecordsByUniqueName(uniqueName: string): Promise<PriceRecord[]> {
+    const { data, error } = await supabase
+        .from('price_records')
+        .select('*')
+        .ilike('unique_name', uniqueName)
+        .is('deleted_at', null)
+
+    if (error) {
+        console.error('查询记录失败:', error)
+        return []
+    }
+
+    const records = data.map(dbRecordToPriceRecord)
+
+    if (records.length === 0) return []
+
+    const lowestPrice = Math.min(...records.map(r => r.unitPrice))
+    const getSortTime = (record: PriceRecord) => {
+        const createdAtTime = new Date(record.createdAt).getTime()
+        if (!Number.isNaN(createdAtTime)) return createdAtTime
+        const purchaseAtTime = new Date(record.purchaseDate).getTime()
+        return Number.isNaN(purchaseAtTime) ? 0 : purchaseAtTime
+    }
+
+    return records.sort((a, b) => {
+        const aIsLowest = a.unitPrice === lowestPrice
+        const bIsLowest = b.unitPrice === lowestPrice
+
+        if (aIsLowest && !bIsLowest) return -1
+        if (!aIsLowest && bIsLowest) return 1
+
+        return getSortTime(b) - getSortTime(a)
+    })
+}
+
+export async function getAllUniqueNames(): Promise<string[]> {
+    const { data, error } = await supabase
+        .from('price_records')
+        .select('unique_name')
+        .is('deleted_at', null)
+
+    if (error) {
+        console.error('获取唯一名称列表失败:', error)
+        return []
+    }
+
+    const uniqueNames = new Set(data.map(r => r.unique_name).filter(Boolean))
+    return Array.from(uniqueNames).sort()
+}
+
 export async function getRecordsByProduct(productName: string, brand: string): Promise<PriceRecord[]> {
     const { data, error } = await supabase
         .from('price_records')
@@ -276,6 +328,7 @@ export async function importData(jsonData: string): Promise<void> {
         for (const raw of records) {
             if (!raw || typeof raw !== 'object') continue
             if (typeof raw.id !== 'string' || !raw.id) continue
+            if (typeof raw.uniqueName !== 'string') continue
             if (typeof raw.productName !== 'string') continue
             if (typeof raw.brand !== 'string') continue
             if (typeof raw.category !== 'string') continue
@@ -290,6 +343,7 @@ export async function importData(jsonData: string): Promise<void> {
 
             validRecords.push({
                 id: raw.id,
+                uniqueName: raw.uniqueName,
                 productName: raw.productName,
                 brand: raw.brand,
                 category: raw.category,

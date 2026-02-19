@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getRecordsByProduct, deleteRecord, addRecord } from '../services/storage'
+import { getRecordsByUniqueName, deleteRecord, addRecord } from '../services/storage'
 import { PriceRecord, UNIT_TYPES } from '../types'
 import RecordCard from '../components/RecordCard'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -18,7 +18,7 @@ import { PackageSearch } from 'lucide-react'
 
 export default function ProductDetailPage() {
     const navigate = useNavigate()
-    const { productName, brand } = useParams<{ productName: string; brand: string }>()
+    const { uniqueName } = useParams<{ uniqueName: string }>()
     const { push } = useToast()
     const [records, setRecords] = useState<PriceRecord[]>([])
     const [showConfirm, setShowConfirm] = useState(false)
@@ -32,15 +32,15 @@ export default function ProductDetailPage() {
 
     useEffect(() => {
         const load = async () => {
-            if (!productName || !brand) return
-            const history = await getRecordsByProduct(decodeURIComponent(productName), decodeURIComponent(brand))
+            if (!uniqueName) return
+            const history = await getRecordsByUniqueName(decodeURIComponent(uniqueName))
             setRecords(history)
         }
         load()
         const onChanged = () => load()
         window.addEventListener('pricecheck:records-changed', onChanged)
         return () => window.removeEventListener('pricecheck:records-changed', onChanged)
-    }, [productName, brand])
+    }, [uniqueName])
 
     useEffect(() => {
         const latest = records[0]
@@ -88,13 +88,12 @@ export default function ProductDetailPage() {
     }
 
     const handleAddTryToHistory = async () => {
-        const decodedProductName = decodeURIComponent(productName || '')
-        const decodedBrand = decodeURIComponent(brand || '')
+        const decodedUniqueName = decodeURIComponent(uniqueName || '')
         const totalPrice = Number(tryFormData.totalPrice)
         const quantity = Number(tryFormData.quantity)
         const unitSpec = tryFormData.unitSpec ? Number(tryFormData.unitSpec) : 1
 
-        if (!decodedProductName || !decodedBrand) return
+        if (!decodedUniqueName) return
 
         const nextErrors: Record<string, string> = {}
         if (!Number.isFinite(totalPrice) || totalPrice <= 0) nextErrors.totalPrice = '请输入有效的总价'
@@ -110,8 +109,9 @@ export default function ProductDetailPage() {
         const nowIso = new Date().toISOString()
         const record: PriceRecord = {
             id: generateId(),
-            productName: decodedProductName,
-            brand: decodedBrand,
+            uniqueName: decodedUniqueName,
+            productName: latest?.productName || decodedUniqueName,
+            brand: latest?.brand || '',
             category: latest?.category || '未分类',
             purchaseDate: getTodayDateString(),
             channel: latest?.channel || '价格试算',
@@ -126,7 +126,7 @@ export default function ProductDetailPage() {
         }
 
         await addRecord(record)
-        const history = await getRecordsByProduct(decodedProductName, decodedBrand)
+        const history = await getRecordsByUniqueName(decodedUniqueName)
         setRecords(history)
         setTryFormData(prev => ({ ...prev, totalPrice: '' }))
         push({ title: '已添加到购买历史', description: '你可以在下方历史列表中继续编辑或删除。', variant: 'success' })
@@ -194,8 +194,8 @@ export default function ProductDetailPage() {
             </header>
 
             <div className="product-summary">
-                <h2>{decodeURIComponent(productName || '')}</h2>
-                <p className="product-brand">{decodeURIComponent(brand || '')}</p>
+                <h2>{decodeURIComponent(uniqueName || '')}</h2>
+                {records[0] && <p className="product-brand">{records[0].brand}</p>}
                 <div className="product-stats product-stats-highlight">
                     <div className="stat-item stat-item-highlight">
                         <span className="stat-label">历史最低价</span>

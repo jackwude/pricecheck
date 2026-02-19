@@ -4,10 +4,11 @@ import { formatPrice, formatDate } from '../utils/calculator'
 interface RecordCardProps {
     record: PriceRecord
     isLowestPrice?: boolean
+    recordCount?: number
     onClick?: () => void
 }
 
-export default function RecordCard({ record, isLowestPrice = false, onClick }: RecordCardProps) {
+export default function RecordCard({ record, isLowestPrice = false, recordCount, onClick }: RecordCardProps) {
     const isInteractive = Boolean(onClick)
 
     const handleClick = () => {
@@ -33,7 +34,7 @@ export default function RecordCard({ record, isLowestPrice = false, onClick }: R
         >
             <div className="record-header">
                 <div className="record-product">
-                    <h3>{record.productName}</h3>
+                    <h3>{record.uniqueName}</h3>
                     <span className="record-brand">{record.brand}</span>
                 </div>
                 {isLowestPrice && (
@@ -43,7 +44,11 @@ export default function RecordCard({ record, isLowestPrice = false, onClick }: R
 
             <div className="record-details">
                 <div className="record-info">
-                    <span className="record-label">分类:</span>
+                    <span className="record-label">商品名称:</span>
+                    <span>{record.productName}</span>
+                </div>
+                <div className="record-info">
+                    <span className="record-label">分类标签:</span>
                     <span>{record.category}</span>
                 </div>
                 <div className="record-info">
@@ -54,6 +59,12 @@ export default function RecordCard({ record, isLowestPrice = false, onClick }: R
                     <span className="record-label">日期:</span>
                     <span>{formatDate(record.purchaseDate)}</span>
                 </div>
+                {recordCount !== undefined && recordCount > 1 && (
+                    <div className="record-info">
+                        <span className="record-label">记录数:</span>
+                        <span>{recordCount} 条</span>
+                    </div>
+                )}
             </div>
 
             <div className="record-price-section">

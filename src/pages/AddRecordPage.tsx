@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { addRecord, updateRecord, getRecordById, getRecordsByProduct } from '../services/storage'
+import { addRecord, updateRecord, getRecordById, getRecordsByUniqueName } from '../services/storage'
 import { PriceRecord, UNIT_TYPES } from '../types'
 import { calculateUnitPrice, generateId, getTodayDateString, compareWithHistory } from '../utils/calculator'
 import PriceComparisonDisplay from '../components/PriceComparison'
@@ -19,6 +19,7 @@ export default function AddRecordPage() {
     const { push } = useToast()
 
     const [formData, setFormData] = useState({
+        uniqueName: '',
         productName: '',
         brand: '',
         category: '',
@@ -41,6 +42,7 @@ export default function AddRecordPage() {
             getRecordById(id).then(record => {
                 if (record) {
                     setFormData({
+                        uniqueName: record.uniqueName,
                         productName: record.productName,
                         brand: record.brand,
                         category: record.category,
@@ -65,9 +67,9 @@ export default function AddRecordPage() {
         )
         setUnitPrice(price)
 
-        if (formData.productName && formData.brand && price > 0) {
+        if (formData.uniqueName && price > 0) {
             setShowComparison(true)
-            getRecordsByProduct(formData.productName, formData.brand).then(history => {
+            getRecordsByUniqueName(formData.uniqueName).then(history => {
                 const filteredHistory = isEditMode && id ? history.filter(r => r.id !== id) : history
                 setComparison(compareWithHistory(price, filteredHistory))
             })
@@ -75,7 +77,7 @@ export default function AddRecordPage() {
             setShowComparison(false)
             setComparison(null)
         }
-    }, [formData.totalPrice, formData.quantity, formData.unitSpec, formData.productName, formData.brand, id, isEditMode])
+    }, [formData.totalPrice, formData.quantity, formData.unitSpec, formData.uniqueName, id, isEditMode])
 
     const handleChange = (field: string, value: string) => {
         setErrors((prev) => {
@@ -91,9 +93,10 @@ export default function AddRecordPage() {
         e.preventDefault()
 
         const nextErrors: Record<string, string> = {}
+        if (!formData.uniqueName) nextErrors.uniqueName = '请输入商品唯一名称'
         if (!formData.productName) nextErrors.productName = '请输入商品名称'
         if (!formData.brand) nextErrors.brand = '请输入品牌'
-        if (!formData.category) nextErrors.category = '请输入分类'
+        if (!formData.category) nextErrors.category = '请输入分类标签'
         if (!formData.channel) nextErrors.channel = '请输入购买渠道'
         if (!formData.totalPrice) nextErrors.totalPrice = '请输入总价'
         if (!formData.quantity) nextErrors.quantity = '请输入数量'
@@ -114,6 +117,7 @@ export default function AddRecordPage() {
         const existing = isEditMode && id ? await getRecordById(id) : null
         const record: PriceRecord = {
             id: isEditMode && id ? id : generateId(),
+            uniqueName: formData.uniqueName,
             productName: formData.productName,
             brand: formData.brand,
             category: formData.category,
@@ -130,13 +134,24 @@ export default function AddRecordPage() {
             deletedAt: existing?.deletedAt,
         }
 
-        if (isEditMode && id) {
-            await updateRecord(id, record)
-        } else {
-            await addRecord(record)
-        }
+        try {
+            if (isEditMode && id) {
+                await updateRecord(id, record)
+                push({ title: '更新成功', description: '记录已保存。', variant: 'success' })
+            } else {
+                await addRecord(record)
+                push({ title: '添加成功', description: '记录已保存。', variant: 'success' })
+            }
 
-        navigate('/')
+            navigate('/')
+        } catch (error) {
+            console.error('保存记录失败:', error)
+            push({ 
+                title: isEditMode ? '更新失败' : '添加失败', 
+                description: '保存记录时发生错误，请稍后重试。', 
+                variant: 'danger' 
+            })
+        }
     }
 
     return (
@@ -152,6 +167,15 @@ export default function AddRecordPage() {
                 <div className="form-section">
                     <Card className="form-card">
                         <div className="form-card-title">商品信息</div>
+                        <FormField label="商品唯一名称" required error={errors.uniqueName} hint="用于分类管理，相同名称的商品会被归为一类">
+                            <Input
+                                type="text"
+                                value={formData.uniqueName}
+                                onChange={(e) => handleChange('uniqueName', e.target.value)}
+                                placeholder="例如：维达抽纸超韧"
+                            />
+                        </FormField>
+
                         <FormField label="商品名称" required error={errors.productName}>
                             <Input
                                 type="text"
@@ -170,7 +194,7 @@ export default function AddRecordPage() {
                             />
                         </FormField>
 
-                        <FormField label="分类" required error={errors.category}>
+                        <FormField label="分类标签" required error={errors.category} hint="仅用于展示标签">
                             <Input
                                 type="text"
                                 value={formData.category}

@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllRecords } from '../services/storage'
 import { PriceRecord } from '../types'
-import RecordCard from '../components/RecordCard'
 import { IconButton } from '../components/ui/IconButton'
 import { Input } from '../components/ui/Input'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -12,7 +11,6 @@ import { Calculator, Folder, Settings, Plus, PackageSearch, X } from 'lucide-rea
 export default function HomePage() {
     const [records, setRecords] = useState<PriceRecord[]>([])
     const [searchQuery, setSearchQuery] = useState('')
-    const [lowestPriceMap, setLowestPriceMap] = useState<Map<string, number>>(new Map())
     const navigate = useNavigate()
 
     useEffect(() => {
@@ -25,32 +23,45 @@ export default function HomePage() {
     const loadRecords = async () => {
         const allRecords = await getAllRecords()
         setRecords(allRecords)
+    }
+
+    const groupedRecords = useMemo(() => {
+        const groups = new Map<string, { record: PriceRecord; count: number }>()
         
-        const priceMap = new Map<string, number>()
-        for (const record of allRecords) {
-            const key = `${record.productName}|${record.brand}`
-            const current = priceMap.get(key)
-            if (current === undefined || record.unitPrice < current) {
-                priceMap.set(key, record.unitPrice)
+        for (const record of records) {
+            const existing = groups.get(record.uniqueName)
+            if (!existing) {
+                groups.set(record.uniqueName, { record, count: 1 })
+            } else {
+                existing.count++
+                if (record.unitPrice < existing.record.unitPrice) {
+                    existing.record = record
+                }
             }
         }
-        setLowestPriceMap(priceMap)
-    }
+        
+        return groups
+    }, [records])
 
-    const filteredRecords = records.filter(record =>
-        record.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        record.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        record.category.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    const filteredUniqueNames = useMemo(() => {
+        const uniqueNames = Array.from(groupedRecords.keys())
+        if (!searchQuery) return uniqueNames
+        
+        return uniqueNames.filter(uniqueName => {
+            const group = groupedRecords.get(uniqueName)
+            if (!group) return false
+            const record = group.record
+            return (
+                uniqueName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                record.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                record.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                record.category.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+        })
+    }, [groupedRecords, searchQuery])
 
-    const isLowestPrice = (record: PriceRecord): boolean => {
-        const key = `${record.productName}|${record.brand}`
-        const lowest = lowestPriceMap.get(key)
-        return lowest !== undefined && record.unitPrice === lowest
-    }
-
-    const handleRecordClick = (record: PriceRecord) => {
-        navigate(`/product/${encodeURIComponent(record.productName)}/${encodeURIComponent(record.brand)}`)
+    const handleRecordClick = (uniqueName: string) => {
+        navigate(`/product/${encodeURIComponent(uniqueName)}`)
     }
 
     return (
@@ -92,43 +103,62 @@ export default function HomePage() {
                 </div>
             </div>
 
-            <div className="records-container">
-                {filteredRecords.length === 0 ? (
-                    <EmptyState
-                        icon={<PackageSearch size={44} />}
-                        title={searchQuery ? '没有找到匹配记录' : '还没有记录'}
-                        description={searchQuery ? '试试换个关键词，或者清除搜索条件。' : '先添加第一条记录，后续就能快速对比历史最低价。'}
-                        action={
-                            searchQuery ? (
-                                <Button variant="secondary" size="sm" onClick={() => setSearchQuery('')}>
-                                    清除搜索
-                                </Button>
-                            ) : (
-                                <Button variant="primary" size="sm" onClick={() => navigate('/add')}>
-                                    新增记录
-                                </Button>
-                            )
-                        }
-                    />
-                ) : (
-                    filteredRecords.map(record => (
-                        <RecordCard
-                            key={record.id}
-                            record={record}
-                            isLowestPrice={isLowestPrice(record)}
-                            onClick={() => handleRecordClick(record)}
-                        />
-                    ))
-                )}
+            <div className="home-add-section">
+                <Button variant="primary" onClick={() => navigate('/add')}>
+                    <Plus size={18} />
+                    新增记录
+                </Button>
             </div>
 
-            <button
-                className="fab"
-                onClick={() => navigate('/add')}
-                title="新增记录"
-            >
-                <Plus size={28} />
-            </button>
+            <div className="records-grid">
+                {filteredUniqueNames.length === 0 ? (
+                    <div className="records-grid-empty">
+                        <EmptyState
+                            icon={<PackageSearch size={44} />}
+                            title={searchQuery ? '没有找到匹配记录' : '还没有记录'}
+                            description={searchQuery ? '试试换个关键词，或者清除搜索条件。' : '点击上方按钮添加第一条记录。'}
+                            action={
+                                searchQuery ? (
+                                    <Button variant="secondary" size="sm" onClick={() => setSearchQuery('')}>
+                                        清除搜索
+                                    </Button>
+                                ) : undefined
+                            }
+                        />
+                    </div>
+                ) : (
+                    filteredUniqueNames.map(uniqueName => {
+                        const group = groupedRecords.get(uniqueName)
+                        if (!group) return null
+                        const { record, count } = group
+                        return (
+                            <div
+                                key={uniqueName}
+                                className="record-mini-card"
+                                onClick={() => handleRecordClick(uniqueName)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault()
+                                        handleRecordClick(uniqueName)
+                                    }
+                                }}
+                            >
+                                <div className="mini-card-header">
+                                    <span className="mini-card-name">{record.uniqueName}</span>
+                                    {count > 1 && <span className="mini-card-count">{count}</span>}
+                                </div>
+                                <div className="mini-card-price">
+                                    ¥{(record.unitPrice).toFixed(2)}
+                                    <span className="mini-card-unit">/{record.unitType}</span>
+                                </div>
+                                <div className="mini-card-brand">{record.brand}</div>
+                            </div>
+                        )
+                    })
+                )}
+            </div>
         </div>
     )
 }

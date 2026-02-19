@@ -6,7 +6,7 @@ import {
     exportData,
     getAllRecords,
     getRecordById,
-    getRecordsByProduct,
+    getRecordsByUniqueName,
     importData,
     searchRecords,
     updateRecord,
@@ -22,6 +22,7 @@ export default function SelfTestPage() {
     const [message, setMessage] = useState('')
 
     const runSelfTest = async () => {
+        const testUniqueName = 'SelfTest-UniqueName'
         const testProductName = 'SelfTest 商品'
         const testBrand = 'SelfTest 品牌'
         const testCategory = 'SelfTest 分类'
@@ -31,6 +32,7 @@ export default function SelfTestPage() {
         const now = Date.now()
         const recordA: PriceRecord = {
             id: generateId(),
+            uniqueName: testUniqueName,
             productName: testProductName,
             brand: testBrand,
             category: testCategory,
@@ -48,6 +50,7 @@ export default function SelfTestPage() {
 
         const recordB: PriceRecord = {
             id: generateId(),
+            uniqueName: testUniqueName,
             productName: testProductName,
             brand: testBrand,
             category: testCategory,
@@ -79,7 +82,7 @@ export default function SelfTestPage() {
                 throw new Error(`新增失败：期望 2 条记录，实际 ${all1.length} 条`)
             }
 
-            const productHistory = await getRecordsByProduct(testProductName, testBrand)
+            const productHistory = await getRecordsByUniqueName(testUniqueName)
             if (productHistory.length !== 2) {
                 throw new Error(`查询失败：期望 2 条记录，实际 ${productHistory.length} 条`)
             }
