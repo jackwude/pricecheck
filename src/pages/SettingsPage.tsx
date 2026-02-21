@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSettings, saveSettings, exportData, importData } from '../services/storage'
+import { getSettings, saveSettings, exportData, importData, clearRecordsCache } from '../services/storage'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { useToast } from '../components/ui/ToastProvider'
-import { Download, Upload, Sun, Moon } from 'lucide-react'
+import { Download, Upload, Sun, Moon, RefreshCw } from 'lucide-react'
 
 export default function SettingsPage() {
     const navigate = useNavigate()
@@ -120,6 +120,19 @@ export default function SettingsPage() {
                         <span className="settings-action-text">
                             <span className="settings-action-title">导入数据</span>
                             <span className="settings-action-desc">从 JSON 文件导入记录（会覆盖现有数据）</span>
+                        </span>
+                    </button>
+                    <button className="settings-action" onClick={() => {
+                        clearRecordsCache()
+                        push({ title: '缓存已清除', description: '下次加载数据将从服务器重新获取。', variant: 'success' })
+                        navigate('/')
+                    }} type="button">
+                        <span className="settings-action-icon" aria-hidden="true">
+                            <RefreshCw size={18} />
+                        </span>
+                        <span className="settings-action-text">
+                            <span className="settings-action-title">清除缓存</span>
+                            <span className="settings-action-desc">清除本地缓存，从服务器重新获取数据</span>
                         </span>
                     </button>
                 </Card>

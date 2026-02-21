@@ -1,28 +1,53 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAllRecords } from '../services/storage'
+import { getAllRecords, refreshRecords } from '../services/storage'
 import { PriceRecord } from '../types'
 import { IconButton } from '../components/ui/IconButton'
 import { Input } from '../components/ui/Input'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
+import { useToast } from '../components/ui/ToastProvider'
 import { Calculator, Folder, Settings, Plus, PackageSearch, X } from 'lucide-react'
 
 export default function HomePage() {
     const [records, setRecords] = useState<PriceRecord[]>([])
+    const [isLoading, setIsLoading] = useState(true)
+    const [isRefreshing, setIsRefreshing] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
     const navigate = useNavigate()
+    const { push } = useToast()
 
     useEffect(() => {
-        loadRecords()
-        const onChanged = () => loadRecords()
+        void loadRecords()
+        const onChanged = () => {
+            setIsRefreshing(true)
+            refreshRecords()
+                .then(newRecords => {
+                    setRecords(newRecords)
+                })
+                .catch((error) => {
+                    console.error('刷新记录失败:', error)
+                    push({ title: '刷新失败', description: '请稍后重试。', variant: 'danger' })
+                })
+                .finally(() => {
+                    setIsRefreshing(false)
+                })
+        }
         window.addEventListener('pricecheck:records-changed', onChanged)
         return () => window.removeEventListener('pricecheck:records-changed', onChanged)
-    }, [])
+    }, [push])
 
     const loadRecords = async () => {
-        const allRecords = await getAllRecords()
-        setRecords(allRecords)
+        setIsLoading(true)
+        try {
+            const allRecords = await getAllRecords()
+            setRecords(allRecords)
+        } catch (error) {
+            console.error('加载记录失败:', error)
+            push({ title: '加载失败', description: '请稍后重试。', variant: 'danger' })
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     const groupedRecords = useMemo(() => {
@@ -111,7 +136,15 @@ export default function HomePage() {
             </div>
 
             <div className="records-grid">
-                {filteredUniqueNames.length === 0 ? (
+                {isLoading ? (
+                    Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="record-mini-card skeleton-card">
+                            <div className="skeleton skeleton-title" />
+                            <div className="skeleton skeleton-price" />
+                            <div className="skeleton skeleton-brand" />
+                        </div>
+                    ))
+                ) : filteredUniqueNames.length === 0 ? (
                     <div className="records-grid-empty">
                         <EmptyState
                             icon={<PackageSearch size={44} />}
@@ -134,7 +167,7 @@ export default function HomePage() {
                         return (
                             <div
                                 key={uniqueName}
-                                className="record-mini-card"
+                                className={`record-mini-card ${isRefreshing ? 'is-refreshing' : ''}`}
                                 onClick={() => handleRecordClick(uniqueName)}
                                 role="button"
                                 tabIndex={0}

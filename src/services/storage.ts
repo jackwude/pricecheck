@@ -2,8 +2,46 @@ import { PriceRecord } from '../types'
 import { supabase } from '../lib/supabase'
 
 const SETTINGS_KEY = 'pricecheck_settings'
+const CACHE_KEY = 'pricecheck_records_cache'
+const CACHE_TIMESTAMP_KEY = 'pricecheck_cache_timestamp'
+const CACHE_DURATION = 5 * 60 * 1000
+
+function getCachedRecords(): PriceRecord[] | null {
+    try {
+        const cached = localStorage.getItem(CACHE_KEY)
+        const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY)
+        
+        if (!cached || !timestamp) return null
+        
+        const cacheAge = Date.now() - parseInt(timestamp, 10)
+        if (cacheAge > CACHE_DURATION) {
+            localStorage.removeItem(CACHE_KEY)
+            localStorage.removeItem(CACHE_TIMESTAMP_KEY)
+            return null
+        }
+        
+        return JSON.parse(cached)
+    } catch {
+        return null
+    }
+}
+
+function setCachedRecords(records: PriceRecord[]): void {
+    try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(records))
+        localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString())
+    } catch {
+        // ignore storage errors
+    }
+}
+
+export function clearRecordsCache(): void {
+    localStorage.removeItem(CACHE_KEY)
+    localStorage.removeItem(CACHE_TIMESTAMP_KEY)
+}
 
 function notifyRecordsChanged() {
+    clearRecordsCache()
     if (typeof window === 'undefined') return
     window.dispatchEvent(new Event('pricecheck:records-changed'))
 }
@@ -70,6 +108,8 @@ export async function getAllRecordsForSync(): Promise<PriceRecord[]> {
 }
 
 export async function replaceAllRecordsForSync(records: PriceRecord[]): Promise<void> {
+    const snapshot = await getAllRecordsForSync()
+
     const { error: deleteError } = await supabase
         .from('price_records')
         .delete()
@@ -80,27 +120,60 @@ export async function replaceAllRecordsForSync(records: PriceRecord[]): Promise<
         throw deleteError
     }
 
-    if (records.length === 0) {
+    try {
+        if (records.length > 0) {
+            const dbRecords = records.map(priceRecordToDbRecord)
+            const { error: insertError } = await supabase
+                .from('price_records')
+                .insert(dbRecords)
+
+            if (insertError) {
+                throw insertError
+            }
+        }
+
         notifyRecordsChanged()
-        return
+    } catch (replaceError) {
+        console.error('替换记录失败，开始回滚:', replaceError)
+
+        if (snapshot.length > 0) {
+            const snapshotDbRecords = snapshot.map(priceRecordToDbRecord)
+            const { error: rollbackError } = await supabase
+                .from('price_records')
+                .insert(snapshotDbRecords)
+
+            if (rollbackError) {
+                console.error('回滚失败:', rollbackError)
+                const replaceMessage = replaceError instanceof Error ? replaceError.message : String(replaceError)
+                throw new Error(`导入失败且回滚失败: ${replaceMessage}`)
+            }
+        }
+
+        notifyRecordsChanged()
+        const replaceMessage = replaceError instanceof Error ? replaceError.message : String(replaceError)
+        throw new Error(`导入失败，已回滚原数据: ${replaceMessage}`)
     }
-
-    const dbRecords = records.map(priceRecordToDbRecord)
-    const { error: insertError } = await supabase
-        .from('price_records')
-        .insert(dbRecords)
-
-    if (insertError) {
-        console.error('插入记录失败:', insertError)
-        throw insertError
-    }
-
-    notifyRecordsChanged()
 }
 
-export async function getAllRecords(): Promise<PriceRecord[]> {
+export async function getAllRecords(options?: { useCache?: boolean }): Promise<PriceRecord[]> {
+    if (options?.useCache !== false) {
+        const cached = getCachedRecords()
+        if (cached) {
+            return cached
+        }
+    }
+    
     const records = await getAllRecordsForSync()
-    return records.filter(r => !r.deletedAt)
+    const activeRecords = records.filter(r => !r.deletedAt)
+    setCachedRecords(activeRecords)
+    return activeRecords
+}
+
+export async function refreshRecords(): Promise<PriceRecord[]> {
+    const records = await getAllRecordsForSync()
+    const activeRecords = records.filter(r => !r.deletedAt)
+    setCachedRecords(activeRecords)
+    return activeRecords
 }
 
 export async function getRecordById(id: string): Promise<PriceRecord | null> {
@@ -180,7 +253,35 @@ export async function deleteRecord(id: string): Promise<void> {
     notifyRecordsChanged()
 }
 
-export async function getRecordsByUniqueName(uniqueName: string): Promise<PriceRecord[]> {
+export async function getRecordsByUniqueName(uniqueName: string, useCache = true): Promise<PriceRecord[]> {
+    if (useCache) {
+        const cached = getCachedRecords()
+        if (cached) {
+            const records = cached.filter(r => 
+                r.uniqueName.toLowerCase() === uniqueName.toLowerCase()
+            )
+            if (records.length === 0) return []
+            
+            const lowestPrice = Math.min(...records.map(r => r.unitPrice))
+            const getSortTime = (record: PriceRecord) => {
+                const createdAtTime = new Date(record.createdAt).getTime()
+                if (!Number.isNaN(createdAtTime)) return createdAtTime
+                const purchaseAtTime = new Date(record.purchaseDate).getTime()
+                return Number.isNaN(purchaseAtTime) ? 0 : purchaseAtTime
+            }
+
+            return records.sort((a, b) => {
+                const aIsLowest = a.unitPrice === lowestPrice
+                const bIsLowest = b.unitPrice === lowestPrice
+
+                if (aIsLowest && !bIsLowest) return -1
+                if (!aIsLowest && bIsLowest) return 1
+
+                return getSortTime(b) - getSortTime(a)
+            })
+        }
+    }
+    
     const { data, error } = await supabase
         .from('price_records')
         .select('*')
@@ -215,7 +316,15 @@ export async function getRecordsByUniqueName(uniqueName: string): Promise<PriceR
     })
 }
 
-export async function getAllUniqueNames(): Promise<string[]> {
+export async function getAllUniqueNames(useCache = true): Promise<string[]> {
+    if (useCache) {
+        const cached = getCachedRecords()
+        if (cached) {
+            const uniqueNames = new Set(cached.map(r => r.uniqueName).filter(Boolean))
+            return Array.from(uniqueNames).sort()
+        }
+    }
+    
     const { data, error } = await supabase
         .from('price_records')
         .select('unique_name')

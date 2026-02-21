@@ -4,6 +4,7 @@ import { getAllUniqueNames, getRecordsByUniqueName } from '../services/storage'
 import { PriceRecord } from '../types'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
+import { useToast } from '../components/ui/ToastProvider'
 import { FolderOpen } from 'lucide-react'
 
 export default function CategoryPage() {
@@ -12,33 +13,48 @@ export default function CategoryPage() {
     const [selectedUniqueName, setSelectedUniqueName] = useState<string | null>(null)
     const [records, setRecords] = useState<PriceRecord[]>([])
     const [uniqueNameCounts, setUniqueNameCounts] = useState<Map<string, number>>(new Map())
+    const { push } = useToast()
 
     useEffect(() => {
         const load = async () => {
-            const names = await getAllUniqueNames()
-            setUniqueNames(names)
-            
-            const counts = new Map<string, number>()
-            for (const name of names) {
-                const nameRecords = await getRecordsByUniqueName(name)
-                counts.set(name, nameRecords.length)
-            }
-            setUniqueNameCounts(counts)
-            
-            if (selectedUniqueName) {
-                const nameRecords = await getRecordsByUniqueName(selectedUniqueName)
-                setRecords(nameRecords)
+            try {
+                const names = await getAllUniqueNames()
+                setUniqueNames(names)
+
+                const counts = new Map<string, number>()
+                for (const name of names) {
+                    const nameRecords = await getRecordsByUniqueName(name)
+                    counts.set(name, nameRecords.length)
+                }
+                setUniqueNameCounts(counts)
+
+                if (selectedUniqueName) {
+                    const nameRecords = await getRecordsByUniqueName(selectedUniqueName)
+                    setRecords(nameRecords)
+                }
+            } catch (error) {
+                console.error('加载分类数据失败:', error)
+                push({ title: '加载失败', description: '请稍后重试。', variant: 'danger' })
             }
         }
-        load()
-        window.addEventListener('pricecheck:records-changed', () => load())
-        return () => window.removeEventListener('pricecheck:records-changed', () => load())
-    }, [selectedUniqueName])
+        const onChanged = () => {
+            void load()
+        }
+
+        void load()
+        window.addEventListener('pricecheck:records-changed', onChanged)
+        return () => window.removeEventListener('pricecheck:records-changed', onChanged)
+    }, [push, selectedUniqueName])
 
     const handleUniqueNameClick = async (uniqueName: string) => {
         setSelectedUniqueName(uniqueName)
-        const nameRecords = await getRecordsByUniqueName(uniqueName)
-        setRecords(nameRecords)
+        try {
+            const nameRecords = await getRecordsByUniqueName(uniqueName)
+            setRecords(nameRecords)
+        } catch (error) {
+            console.error('加载商品记录失败:', error)
+            push({ title: '加载失败', description: '请稍后重试。', variant: 'danger' })
+        }
     }
 
     const handleRecordClick = (record: PriceRecord) => {
