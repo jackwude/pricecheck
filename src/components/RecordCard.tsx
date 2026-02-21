@@ -35,7 +35,6 @@ export default function RecordCard({ record, isLowestPrice = false, recordCount,
             <div className="record-header">
                 <div className="record-product">
                     <h3>{record.uniqueName}</h3>
-                    <span className="record-brand">{record.brand}</span>
                 </div>
                 {isLowestPrice && (
                     <span className="lowest-badge">最低价</span>
@@ -43,14 +42,6 @@ export default function RecordCard({ record, isLowestPrice = false, recordCount,
             </div>
 
             <div className="record-details">
-                <div className="record-info">
-                    <span className="record-label">商品名称:</span>
-                    <span>{record.productName}</span>
-                </div>
-                <div className="record-info">
-                    <span className="record-label">分类标签:</span>
-                    <span>{record.category}</span>
-                </div>
                 <div className="record-info">
                     <span className="record-label">渠道:</span>
                     <span>{record.channel}</span>

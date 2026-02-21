@@ -24,7 +24,7 @@ export default function SelfTestPage() {
     const runSelfTest = async () => {
         const testUniqueName = 'SelfTest-UniqueName'
         const testProductName = 'SelfTest 商品'
-        const testBrand = 'SelfTest 品牌'
+        const testBrand = ''
         const testCategory = 'SelfTest 分类'
         const testChannel = 'SelfTest 渠道'
         const testPurchaseDate = getTodayDateString()

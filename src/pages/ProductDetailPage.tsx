@@ -36,8 +36,8 @@ export default function ProductDetailPage() {
             const history = await getRecordsByUniqueName(decodeURIComponent(uniqueName))
             setRecords(history)
         }
-        load()
-        const onChanged = () => load()
+        void load()
+        const onChanged = () => void load()
         window.addEventListener('pricecheck:records-changed', onChanged)
         return () => window.removeEventListener('pricecheck:records-changed', onChanged)
     }, [uniqueName])
@@ -46,7 +46,7 @@ export default function ProductDetailPage() {
         const latest = records[0]
         if (!latest) return
 
-        setTryFormData(prev => ({
+        setTryFormData((prev) => ({
             ...prev,
             quantity: prev.quantity || String(latest.quantity),
             unitSpec: prev.unitSpec || String(latest.unitSpec),
@@ -54,9 +54,7 @@ export default function ProductDetailPage() {
         }))
     }, [records])
 
-    const lowestPrice = records.length > 0
-        ? Math.min(...records.map(r => r.unitPrice))
-        : 0
+    const lowestPrice = records.length > 0 ? Math.min(...records.map((r) => r.unitPrice)) : 0
 
     const currentTryUnitPrice = useMemo(() => {
         return calculateUnitPrice(
@@ -72,7 +70,7 @@ export default function ProductDetailPage() {
     }, [currentTryUnitPrice, records])
 
     const hasUnitTypeMismatch = useMemo(() => {
-        return records.some(r => r.unitType !== tryFormData.unitType)
+        return records.some((r) => r.unitType !== tryFormData.unitType)
     }, [records, tryFormData.unitType])
 
     const [tryErrors, setTryErrors] = useState<Record<string, string>>({})
@@ -84,7 +82,7 @@ export default function ProductDetailPage() {
             delete next[field]
             return next
         })
-        setTryFormData(prev => ({ ...prev, [field]: value }))
+        setTryFormData((prev) => ({ ...prev, [field]: value }))
     }
 
     const handleAddTryToHistory = async () => {
@@ -110,9 +108,9 @@ export default function ProductDetailPage() {
         const record: PriceRecord = {
             id: generateId(),
             uniqueName: decodedUniqueName,
-            productName: latest?.productName || decodedUniqueName,
-            brand: latest?.brand || '',
-            category: latest?.category || '未分类',
+            productName: decodedUniqueName,
+            brand: '',
+            category: '',
             purchaseDate: getTodayDateString(),
             channel: latest?.channel || '价格试算',
             totalPrice,
@@ -128,7 +126,7 @@ export default function ProductDetailPage() {
         await addRecord(record)
         const history = await getRecordsByUniqueName(decodedUniqueName)
         setRecords(history)
-        setTryFormData(prev => ({ ...prev, totalPrice: '' }))
+        setTryFormData((prev) => ({ ...prev, totalPrice: '' }))
         push({ title: '已添加到购买历史', description: '你可以在下方历史列表中继续编辑或删除。', variant: 'success' })
     }
 
@@ -144,7 +142,7 @@ export default function ProductDetailPage() {
     const confirmDelete = async () => {
         if (recordToDelete) {
             await deleteRecord(recordToDelete.id)
-            const updatedRecords = records.filter(r => r.id !== recordToDelete.id)
+            const updatedRecords = records.filter((r) => r.id !== recordToDelete.id)
             setRecords(updatedRecords)
 
             if (updatedRecords.length === 0) {
@@ -183,6 +181,7 @@ export default function ProductDetailPage() {
         )
     }
 
+    const latestRecord = records[0]
 
     return (
         <div className="page">
@@ -193,23 +192,25 @@ export default function ProductDetailPage() {
                 <h1>商品详情</h1>
             </header>
 
-            <div className="product-summary">
-                <h2>{decodeURIComponent(uniqueName || '')}</h2>
-                {records[0] && <p className="product-brand">{records[0].brand}</p>}
-                <div className="product-stats product-stats-highlight">
-                    <div className="stat-item stat-item-highlight">
-                        <span className="stat-label">历史最低价</span>
-                        <span className="stat-value">¥{formatPrice(lowestPrice)}</span>
+            <section className="product-kpi-wrap">
+                <Card className="product-kpi-card" interactive density="compact">
+                    <div className="product-kpi-title-row">
+                        <h2>{decodeURIComponent(uniqueName || '')}</h2>
+                        <div className="product-kpi-badges">
+                            {latestRecord ? <span className="mini-card-count">{records.length} 条</span> : null}
+                            <span className="product-kpi-badge">历史最低 ¥{formatPrice(lowestPrice)}</span>
+                            <span className="product-kpi-badge">最近购买 ¥{formatPrice(latestRecord?.unitPrice || 0)}</span>
+                        </div>
                     </div>
-                </div>
-            </div>
+                </Card>
+            </section>
 
-            <div className="section-title">
+            <div id="try-calculator" className="section-anchor-title">
                 <h3>价格试算</h3>
             </div>
 
             <div className="calculator-container">
-                <Card className="form-card">
+                <Card className="form-card try-form-card" interactive density="compact">
                     <FormField label="总价 (¥)" error={tryErrors.totalPrice}>
                         <Input
                             type="number"
@@ -221,7 +222,7 @@ export default function ProductDetailPage() {
                         />
                     </FormField>
 
-                    <div className="form-row">
+                    <div className="form-row try-form-row">
                         <FormField label="数量" error={tryErrors.quantity}>
                             <Input
                                 type="number"
@@ -232,7 +233,7 @@ export default function ProductDetailPage() {
                             />
                         </FormField>
 
-                        <FormField label="单品规格（可选，默认 1）" error={tryErrors.unitSpec}>
+                        <FormField label="规格(可选)" error={tryErrors.unitSpec}>
                             <Input
                                 type="number"
                                 value={tryFormData.unitSpec}
@@ -244,56 +245,48 @@ export default function ProductDetailPage() {
 
                         <FormField label="单位">
                             <Select value={tryFormData.unitType} onChange={(e) => handleTryChange('unitType', e.target.value)}>
-                                {UNIT_TYPES.map(unit => (
-                                    <option key={unit} value={unit}>{unit}</option>
+                                {UNIT_TYPES.map((unit) => (
+                                    <option key={unit} value={unit}>
+                                        {unit}
+                                    </option>
                                 ))}
                             </Select>
                         </FormField>
                     </div>
 
-                    {currentTryUnitPrice > 0 && (
-                        <div className="unit-price-display">
+                    {currentTryUnitPrice > 0 ? (
+                        <div className="unit-price-display unit-price-display-compact">
                             <span className="unit-price-label">当前单位价格</span>
                             <span className="unit-price-value">¥{currentTryUnitPrice.toFixed(4)} / {tryFormData.unitType}</span>
                         </div>
-                    )}
+                    ) : null}
 
-                    {currentTryUnitPrice > 0 && hasUnitTypeMismatch && (
+                    {currentTryUnitPrice > 0 && hasUnitTypeMismatch ? (
                         <Banner variant="info">提示：该商品历史记录的单位不完全一致，比较结果可能不准确。</Banner>
-                    )}
+                    ) : null}
 
-                    {tryComparison && (
-                        <PriceComparisonDisplay comparison={tryComparison} currentPrice={currentTryUnitPrice} />
-                    )}
+                    {tryComparison ? <PriceComparisonDisplay comparison={tryComparison} currentPrice={currentTryUnitPrice} /> : null}
 
-                    <Button
-                        type="button"
-                        variant="primary"
-                        fullWidth
-                        onClick={handleAddTryToHistory}
-                        disabled={currentTryUnitPrice <= 0}
-                    >
+                    <Button type="button" variant="primary" tone="brand" fullWidth onClick={handleAddTryToHistory} disabled={currentTryUnitPrice <= 0}>
                         添加到购买历史
                     </Button>
                 </Card>
             </div>
 
-            <div className="section-title">
+            <div id="purchase-history" className="section-anchor-title section-anchor-divider">
                 <h3>购买历史</h3>
+                <p>按时间回看历史价格，编辑或删除单条记录</p>
             </div>
 
             <div className="records-container">
-                {records.map(record => (
+                {records.map((record) => (
                     <div key={record.id} className="record-with-actions">
-                        <RecordCard
-                            record={record}
-                            isLowestPrice={record.unitPrice === lowestPrice}
-                        />
+                        <RecordCard record={record} isLowestPrice={record.unitPrice === lowestPrice} />
                         <div className="record-actions">
-                            <Button size="sm" variant="secondary" onClick={() => handleEdit(record)}>
+                            <Button size="sm" variant="secondary" tone="neutral" onClick={() => handleEdit(record)}>
                                 编辑
                             </Button>
-                            <Button size="sm" variant="danger" onClick={() => handleDelete(record)}>
+                            <Button size="sm" variant="danger" tone="danger" onClick={() => handleDelete(record)}>
                                 删除
                             </Button>
                         </div>
@@ -305,6 +298,8 @@ export default function ProductDetailPage() {
                 show={showConfirm}
                 title="确认删除"
                 message="确定要删除这条记录吗？此操作无法撤销。"
+                confirmText="确认删除"
+                confirmVariant="danger"
                 onConfirm={confirmDelete}
                 onCancel={cancelDelete}
             />

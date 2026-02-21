@@ -3,7 +3,7 @@ export interface PriceRecord {
     id: string                    // 唯一标识
     uniqueName: string            // 商品唯一名称（用于分类管理）
     productName: string           // 商品名称
-    brand: string                 // 品牌
+    brand: string                 // 兼容字段（UI 不展示）
     category: string              // 分类标签（仅展示用）
     purchaseDate: string          // 购买日期 (ISO格式)
     channel: string               // 购买渠道

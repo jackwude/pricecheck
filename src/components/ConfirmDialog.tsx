@@ -6,9 +6,19 @@ interface ConfirmDialogProps {
     message: string
     onConfirm: () => void
     onCancel: () => void
+    confirmText?: string
+    confirmVariant?: 'primary' | 'secondary' | 'danger'
 }
 
-export default function ConfirmDialog({ show, title, message, onConfirm, onCancel }: ConfirmDialogProps) {
+export default function ConfirmDialog({
+    show,
+    title,
+    message,
+    onConfirm,
+    onCancel,
+    confirmText = '确定删除',
+    confirmVariant = 'danger',
+}: ConfirmDialogProps) {
     if (!show) return null
 
     return (
@@ -24,8 +34,8 @@ export default function ConfirmDialog({ show, title, message, onConfirm, onCance
                     <Button variant="secondary" onClick={onCancel}>
                         取消
                     </Button>
-                    <Button variant="danger" onClick={onConfirm}>
-                        确定删除
+                    <Button variant={confirmVariant} onClick={onConfirm}>
+                        {confirmText}
                     </Button>
                 </div>
             </div>

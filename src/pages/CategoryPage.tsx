@@ -125,9 +125,7 @@ export default function CategoryPage() {
                                 onClick={() => handleRecordClick(record)}
                             >
                                 <div className="product-info">
-                                    <h3>{record.productName}</h3>
-                                    <p className="product-brand">{record.brand}</p>
-                                    {record.category && <p className="product-category">{record.category}</p>}
+                                    <h3>{record.uniqueName}</h3>
                                 </div>
                                 <div className="product-price">
                                     ¥{record.unitPrice.toFixed(2)}/{record.unitType}

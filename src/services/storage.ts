@@ -253,6 +253,28 @@ export async function deleteRecord(id: string): Promise<void> {
     notifyRecordsChanged()
 }
 
+export async function deleteRecordsByUniqueName(uniqueName: string): Promise<number> {
+    const nowIso = new Date().toISOString()
+
+    const { data, error } = await supabase
+        .from('price_records')
+        .update({
+            deleted_at: nowIso,
+            updated_at: nowIso,
+        })
+        .ilike('unique_name', uniqueName)
+        .is('deleted_at', null)
+        .select('id')
+
+    if (error) {
+        console.error('批量删除记录失败:', error)
+        throw error
+    }
+
+    notifyRecordsChanged()
+    return data?.length ?? 0
+}
+
 export async function getRecordsByUniqueName(uniqueName: string, useCache = true): Promise<PriceRecord[]> {
     if (useCache) {
         const cached = getCachedRecords()
